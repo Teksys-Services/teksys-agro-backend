@@ -68,7 +68,7 @@ export const productRequestService = {
 
     let q = supabase
       .from('product_requests')
-      .select('*, marketplace_products(id, name, slug, image_urls, selling_price, stock_quantity, unit)', { count: 'exact' })
+      .select('*, marketplace_products(id, name, slug, image_url, selling_price, stock_quantity, unit)', { count: 'exact' })
       .eq('customer_id', customerId)
       .order('created_at', { ascending: false });
 
@@ -90,7 +90,7 @@ export const productRequestService = {
   async getById(customerId: string, requestId: string) {
     const { data, error } = await supabase
       .from('product_requests')
-      .select('*, marketplace_products(id, name, slug, image_urls, selling_price, stock_quantity, unit), users!product_requests_customer_id_fkey(name, phone, email)')
+      .select('*, marketplace_products(id, name, slug, image_url, selling_price, stock_quantity, unit), users!product_requests_customer_id_fkey(name, phone, email)')
       .eq('id', requestId)
       .eq('customer_id', customerId)
       .single();
@@ -197,7 +197,7 @@ export const productRequestService = {
   async getByIdAdmin(requestId: string) {
     const { data, error } = await supabase
       .from('product_requests')
-      .select('*, marketplace_products(id, name, slug, image_urls, selling_price, stock_quantity, unit), users!product_requests_customer_id_fkey(name, phone, email)')
+      .select('*, marketplace_products(id, name, slug, image_url, selling_price, stock_quantity, unit), users!product_requests_customer_id_fkey(name, phone, email)')
       .eq('id', requestId)
       .single();
     if (error) throw new Error('Request not found');

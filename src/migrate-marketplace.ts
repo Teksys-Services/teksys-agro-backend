@@ -90,7 +90,7 @@ async function migrate() {
         avg_rating NUMERIC(3,2) DEFAULT 0,
         total_reviews INT DEFAULT 0,
         total_sold INT DEFAULT 0,
-        image_urls TEXT[] DEFAULT '{}',
+        image_url TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
