@@ -76,82 +76,48 @@ export const orderService = {
     const deliveryCharges = cart.delivery_charges;
     const totalAmount = subtotal - discountAmount + gst + deliveryCharges;
 
-    // Validate stock for all items
-    for (const item of cart.items) {
+    // Validate stock on client side before calling RPC
+    const cartItemsData = cart.items.map(item => {
       const product = item.marketplace_products;
       if (!product) throw new Error('Product not available');
-      if (product.stock_quantity < item.quantity) {
-        throw new Error(`Insufficient stock for ${product.name}`);
-      }
-    }
-
-    // Create order
-    const { data: order, error } = await supabase
-      .from('marketplace_orders')
-      .insert({
-        order_number: generateOrderNumber(),
-        customer_id: customerId,
-        status: 'confirmed',
-        subtotal,
-        discount_amount: Math.round(discountAmount * 100) / 100,
-        delivery_charges: deliveryCharges,
-        gst_amount: gst,
-        total_amount: Math.round(totalAmount * 100) / 100,
-        coupon_id: couponId,
-        coupon_code: couponCode,
-        payment_method: dto.payment_method,
-        payment_status: dto.payment_method === 'cod' ? 'pending' : 'pending',
-        delivery_address_snapshot: address,
-        delivery_slot: dto.delivery_slot,
-        notes: dto.notes,
-      })
-      .select().single();
-    if (error) throw new Error(error.message);
-
-    // Create order items and update stock
-    for (const item of cart.items) {
-      const product = item.marketplace_products;
-      await supabase.from('marketplace_order_items').insert({
-        order_id: order.id,
+      return {
         product_id: product.id,
-        product_name: product.name,
-        product_image: product.image_url,
-        unit: product.unit,
         quantity: item.quantity,
-        price: product.selling_price,
-        subtotal: product.selling_price * item.quantity,
-      });
+      };
+    });
 
-      // Decrement stock
-      await supabase.from('marketplace_products')
-        .update({
-          stock_quantity: product.stock_quantity - item.quantity,
-          total_sold: (product.total_sold || 0) + item.quantity,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', product.id);
+    const orderNumber = generateOrderNumber();
 
-      // Log inventory transaction
-      await inventoryService.logTransaction(product.id, {
-        action: 'sold',
-        previous_quantity: product.stock_quantity,
-        quantity_change: -item.quantity,
-        new_quantity: product.stock_quantity - item.quantity,
-        notes: `Sold via order #${order.order_number}`,
-      });
+    // Call atomic RPC
+    const { data: orderData, error } = await supabase.rpc('place_marketplace_order', {
+      p_customer_id: customerId,
+      p_order_number: orderNumber,
+      p_subtotal: subtotal,
+      p_discount_amount: Math.round(discountAmount * 100) / 100,
+      p_delivery_charges: deliveryCharges,
+      p_gst_amount: gst,
+      p_total_amount: Math.round(totalAmount * 100) / 100,
+      p_coupon_id: couponId,
+      p_coupon_code: couponCode,
+      p_payment_method: dto.payment_method,
+      p_payment_status: dto.payment_method === 'cod' ? 'pending' : 'pending',
+      p_delivery_address_snapshot: address,
+      p_delivery_slot: dto.delivery_slot || null,
+      p_notes: dto.notes || null,
+      p_cart_items: cartItemsData,
+    });
+
+    if (error) {
+      if (error.message.includes('Insufficient stock')) {
+        throw new Error(error.message);
+      }
+      throw new Error('Failed to place order: ' + error.message);
     }
 
-    // Record coupon usage
-    if (couponId) {
-      await supabase.from('coupon_usage').insert({
-        coupon_id: couponId,
-        customer_id: customerId,
-        order_id: order.id,
-      });
-      await supabase.from('coupons')
-        .update({ used_count: (await supabase.from('coupons').select('used_count').eq('id', couponId).single()).data?.used_count + 1 })
-        .eq('id', couponId);
-    }
+    const order = {
+      id: orderData.id,
+      order_number: orderData.order_number,
+    };
 
     // Clear cart
     await cartService.clearCart(customerId);
