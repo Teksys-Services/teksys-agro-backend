@@ -110,7 +110,7 @@ export const authService = {
   },
 
   async forgotPassword(dto: { email?: string; phone?: string }) {
-    let query = supabase.from('users').select('id, email, phone');
+    let query = supabase.from('users').select('id, email, phone, role');
     if (dto.email) query = query.eq('email', dto.email);
     else if (dto.phone) query = query.eq('phone', dto.phone);
     else throw new Error('Email or phone is required');
@@ -136,7 +136,7 @@ export const authService = {
 
     if (user.email) {
       const { emailService } = require('./email.service');
-      await emailService.sendResetOtp(user.email, otp);
+      await emailService.sendResetOtp(user.email, otp, user.role);
     } else {
       console.log(`[TEST MODE] Password Reset OTP for ${dto.phone}: ${otp}`);
     }

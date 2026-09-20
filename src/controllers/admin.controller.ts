@@ -78,4 +78,42 @@ export const adminController = {
       sendSuccess(res, data, 'Pending payments fetched');
     } catch (err: any) { sendError(res, err.message, 400); }
   },
+
+  // ── Marketplace Orders (L2 Fulfillment) ──────────────────────
+  async getMarketplaceOrders(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const data = await svc().getMarketplaceOrders();
+      sendSuccess(res, data, 'Marketplace orders fetched');
+    } catch (err: any) { sendError(res, err.message, 400); }
+  },
+  
+  async getMarketplaceOrderById(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const data = await svc().getMarketplaceOrderById(req.params.id);
+      sendSuccess(res, data, 'Order details fetched');
+    } catch (err: any) { sendError(res, err.message, 400); }
+  },
+  
+  async updateMarketplaceOrderStatus(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const data = await svc().updateMarketplaceOrderStatus(req.params.id, req.body.status, req.user!.userId);
+      sendSuccess(res, data, 'Order status updated');
+    } catch (err: any) { sendError(res, err.message, 400); }
+  },
+  
+  async getAvailableAgentsForDelivery(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const data = await svc().getAvailableAgentsForDelivery();
+      sendSuccess(res, data, 'Available agents fetched');
+    } catch (err: any) { sendError(res, err.message, 400); }
+  },
+  
+  async assignDeliveryAgent(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { agentId } = req.body;
+      if (!agentId) throw new Error('agentId is required');
+      const data = await svc().assignDeliveryAgent(req.params.id, agentId, req.user!.userId);
+      sendSuccess(res, data, 'Agent assigned');
+    } catch (err: any) { sendError(res, err.message, 400); }
+  },
 };

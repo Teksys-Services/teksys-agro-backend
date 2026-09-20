@@ -176,17 +176,19 @@ export const adminService = {
   },
 
   async getSummary() {
-    const [pickups, bills, payments, product_requests] = await Promise.all([
+    const [pickups, bills, payments, product_requests, marketplace_orders] = await Promise.all([
       supabase.from('pickup_requests').select('status', { count: 'exact' }),
       supabase.from('bills').select('status, total_amount'),
       supabase.from('payments').select('status, amount'),
       supabase.from('product_requests').select('status', { count: 'exact' }),
+      supabase.from('marketplace_orders').select('status', { count: 'exact' }),
     ]);
     return {
       pickups: pickups.data || [],
       bills: bills.data || [],
       payments: payments.data || [],
       product_requests: product_requests.data || [],
+      marketplace_orders: marketplace_orders.data || [],
     };
   },
 
@@ -199,4 +201,94 @@ export const adminService = {
     if (error) throw new Error(error.message);
     return data || [];
   },
+
+  // ── Marketplace Orders (L2 Fulfillment) ──────────────────────
+  async getMarketplaceOrders() {
+    const { data, error } = await supabase
+      .from('marketplace_orders')
+      .select('*, customer:customer_id(name, phone, email), assigned_agent:assigned_agent_id(name, phone)')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+
+  async getMarketplaceOrderById(orderId: string) {
+    const { data, error } = await supabase
+      .from('marketplace_orders')
+      .select('*, customer:customer_id(name, phone, email), assigned_agent:assigned_agent_id(name, phone)')
+      .eq('id', orderId)
+      .single();
+    if (error) throw new Error(error.message);
+
+    const { data: items } = await supabase
+      .from('marketplace_order_items')
+      .select('*')
+      .eq('order_id', orderId);
+
+    return { ...data, items: items || [] };
+  },
+
+  async updateMarketplaceOrderStatus(orderId: string, status: string, adminId: string) {
+    const validStatuses = ['confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'accepted_by_agent', 'picked_up', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'returned'];
+    if (!validStatuses.includes(status)) throw new Error('Invalid status');
+
+    const updateData: any = { status };
+    if (status === 'packed' || status === 'preparing') updateData.packed_at = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('marketplace_orders')
+      .update(updateData)
+      .eq('id', orderId);
+    if (error) throw new Error(error.message);
+
+    return { message: 'Order status updated successfully' };
+  },
+
+  async getAvailableAgentsForDelivery() {
+    const { data, error } = await supabase
+      .from('agent_profiles')
+      .select('*, user:user_id(name, phone, email)')
+      .eq('is_available', true);
+    if (error) throw new Error(error.message);
+
+    // Fetch their current active orders/pickups to calculate workload
+    const agents = [];
+    for (const agent of data || []) {
+      const { data: orders } = await supabase
+        .from('marketplace_orders')
+        .select('id')
+        .eq('assigned_agent_id', agent.user_id)
+        .in('status', ['assigned', 'accepted_by_agent', 'picked_up', 'out_for_delivery']);
+      
+      const { data: pickups } = await supabase
+        .from('pickup_requests')
+        .select('id')
+        .eq('assigned_agent_id', agent.user_id)
+        .in('status', ['assigned', 'otp_generated']);
+        
+      agents.push({
+        ...agent,
+        active_deliveries: (orders?.length || 0) + (pickups?.length || 0)
+      });
+    }
+
+    return agents.sort((a, b) => a.active_deliveries - b.active_deliveries);
+  },
+
+  async assignDeliveryAgent(orderId: string, agentId: string, adminId: string) {
+    const { error } = await supabase
+      .from('marketplace_orders')
+      .update({
+        assigned_agent_id: agentId,
+        assigned_by: adminId,
+        assigned_at: new Date().toISOString(),
+        status: 'assigned'
+      })
+      .eq('id', orderId);
+      
+    if (error) throw new Error(error.message);
+
+    // Record notification for the agent could be added here
+    return { message: 'Delivery agent assigned successfully' };
+  }
 };

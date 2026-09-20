@@ -19,4 +19,11 @@ router.get('/farmers', adminController.getAllFarmers);
 router.get('/agents', adminController.getAllAgents);
 router.get('/summary', adminController.getSummary);
 
+// Marketplace Orders (L2 Fulfillment)
+router.get('/marketplace-orders', adminController.getMarketplaceOrders);
+router.get('/marketplace-orders/eligible-agents', adminController.getAvailableAgentsForDelivery);
+router.get('/marketplace-orders/:id', adminController.getMarketplaceOrderById);
+router.patch('/marketplace-orders/:id/status', adminController.updateMarketplaceOrderStatus);
+router.post('/marketplace-orders/:id/assign', adminController.assignDeliveryAgent);
+
 export default router;

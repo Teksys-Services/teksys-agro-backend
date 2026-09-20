@@ -75,4 +75,37 @@ export const agentService = {
     const { data: profile } = await supabase.from('agent_profiles').select('*').eq('user_id', agentId).single();
     return { ...user, profile };
   },
+
+  // ── Marketplace Deliveries (L2 Fulfillment) ───────────────────
+  async getMarketplaceDeliveries(agentId: string) {
+    const { data, error } = await supabase
+      .from('marketplace_orders')
+      .select('*, customer:customer_id(name, phone), items:marketplace_order_items(product_name, quantity, unit)')
+      .eq('assigned_agent_id', agentId)
+      .in('status', ['assigned', 'accepted_by_agent', 'picked_up', 'out_for_delivery', 'delivered'])
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+
+  async updateDeliveryStatus(orderId: string, agentId: string, status: string) {
+    const validStatuses = ['accepted_by_agent', 'picked_up', 'out_for_delivery', 'delivered'];
+    if (!validStatuses.includes(status)) throw new Error('Invalid status for agent');
+
+    const updateData: any = { status };
+    if (status === 'accepted_by_agent') updateData.agent_accepted_at = new Date().toISOString();
+    if (status === 'picked_up') updateData.picked_up_at = new Date().toISOString();
+    if (status === 'out_for_delivery') updateData.out_for_delivery_at = new Date().toISOString();
+    if (status === 'delivered') updateData.delivered_at = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('marketplace_orders')
+      .update(updateData)
+      .eq('id', orderId)
+      .eq('assigned_agent_id', agentId);
+      
+    if (error) throw new Error(error.message);
+    
+    return { message: 'Delivery status updated successfully' };
+  },
 };

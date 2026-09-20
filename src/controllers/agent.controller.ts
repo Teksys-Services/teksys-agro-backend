@@ -35,4 +35,21 @@ export const agentController = {
       sendSuccess(res, data, 'Profile fetched');
     } catch (err: any) { sendError(res, err.message, 400); }
   },
+
+  // ── Marketplace Deliveries (L2 Fulfillment) ───────────────────
+  async getMarketplaceDeliveries(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const data = await svc().getMarketplaceDeliveries(req.user!.userId);
+      sendSuccess(res, data, 'Deliveries fetched');
+    } catch (err: any) { sendError(res, err.message, 400); }
+  },
+  
+  async updateDeliveryStatus(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { status } = req.body;
+      if (!status) throw new Error('status is required');
+      const data = await svc().updateDeliveryStatus(req.params.id, req.user!.userId, status);
+      sendSuccess(res, data, 'Delivery status updated');
+    } catch (err: any) { sendError(res, err.message, 400); }
+  },
 };
